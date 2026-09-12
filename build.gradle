@@ -1,0 +1,85 @@
+plugins {
+    id 'java'
+    id 'xyz.jpenilla.run-paper' version '2.3.1'
+}
+
+group = 'dev.k1zik'
+version = '1.0'
+
+repositories {
+    mavenCentral()
+    maven {
+        name = "papermc-repo"
+        url = "https://repo.papermc.io/repository/maven-public/"
+    }
+    maven {
+        name = "sonatype"
+        url = "https://oss.sonatype.org/content/groups/public/"
+    }
+}
+
+/**
+ * Universal JAR strategy (same idea as ExplosionProtector):
+ * - compile against Paper 1.19.4 API
+ * - bytecode Java 17 so it runs on 1.19+ server JVMs
+ * - plugin.yml api-version=1.19 so Paper/Spigot 1.19..1.21+ accept one download
+ */
+dependencies {
+    compileOnly "io.papermc.paper:paper-api:1.19.4-R0.1-SNAPSHOT"
+    testImplementation "io.papermc.paper:paper-api:1.19.4-R0.1-SNAPSHOT"
+    testImplementation "org.junit.jupiter:junit-jupiter:5.10.2"
+    testImplementation "org.mockito:mockito-core:5.11.0"
+}
+
+tasks.named('test', Test).configure {
+    useJUnitPlatform()
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+tasks.named('compileJava', JavaCompile).configure {
+    options.encoding = 'UTF-8'
+    options.release = 17
+}
+
+tasks.named('processResources', Copy).configure {
+    def props = [
+            version   : version,
+            apiVersion: '1.19'
+    ]
+    inputs.properties props
+    filteringCharset 'UTF-8'
+    filesMatching('plugin.yml') {
+        expand props
+    }
+}
+
+tasks.named('jar', Jar).configure {
+    archiveBaseName.set('GriefScan')
+    archiveVersion.set(project.version.toString())
+    doLast {
+        def out = archiveFile.get().asFile
+        def alias = new File(out.parentFile, 'GriefScan.jar')
+        alias.bytes = out.bytes
+    }
+}
+
+tasks.register('printJar') {
+    group = 'help'
+    description = 'Print the built JAR path'
+    doLast {
+        println "JAR: ${tasks.jar.archiveFile.get().asFile}"
+        println "Alias: ${layout.buildDirectory.get().asFile}/libs/GriefScan.jar"
+        println "Supports Paper/Spigot: 1.19.x, 1.20.x, 1.21.x"
+        println "Java: 17+"
+    }
+}
+
+tasks.named('runServer').configure {
+    minecraftVersion('1.21.1')
+    jvmArgs('-Dcom.mojang.eula.agree=true')
+}

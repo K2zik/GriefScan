@@ -1,0 +1,24 @@
+name: GriefScan
+main: dev.k1zik.GriefScan
+version: '${version}'
+api-version: '${apiVersion}'
+author: K1zik
+description: Anti-grief scanner for suspicious player actions
+folia-supported: true
+softdepend:
+  - CoreProtect
+  - LiteBans
+libraries:
+  - org.xerial:sqlite-jdbc:3.49.1.0
+commands:
+  griefscan:
+    description: Main GriefScan command
+    usage: /griefscan <reload|status|toggle|logs|antitheft|language|inspect>
+    aliases: [gs, grief]
+permissions:
+  griefscan.admin:
+    description: Access to all GriefScan commands
+    default: op
+  griefscan.bypass:
+    description: Bypass GriefScan filters and anti-theft
+    default: false

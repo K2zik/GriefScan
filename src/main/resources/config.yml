@@ -1,0 +1,173 @@
+# GriefScan configuration
+# language: en, ru, es, zh, hi, ar, fr, de, ja, pt
+language: en
+
+alerts:
+  # Anti-spam for Discord/console/admin chat per player
+  cooldown_seconds: 30
+  # Minimum seconds between filter triggers for the same player+filter
+  trigger_cooldown_seconds: 10
+
+exempt:
+  players: []
+  # - Notch
+  uuids: []
+  # - 069a79f4-44e9-4726-a5be-fca90e38aaf5
+
+integrations:
+  coreprotect_lookup: '/co lookup %player% time:1d'
+  litebans_history: '/litebans:history %player%'
+  teleport_command: '/tppos %x% %y% %z%'
+  kick_command: '/kick %player%'
+  ban_command: '/ban %player%'
+
+notify:
+  console: true
+  admins_chat: true
+  discord: true
+  webhook: 'https://discord.com/api/webhooks/YOUR_WEBHOOK_HERE'
+  website: false
+  website_url: 'https://example.com/report'
+
+  # Placeholders:
+  #   %player% %uuid% %filter% %count% %world% %x% %y% %z%
+  #   %tp% %coreprotect% %litebans% %kick% %ban%
+  messageConsole: '[GriefScan Alert] Offender: %player% | Filter: %filter% | %count% times | %world% %x% %y% %z%'
+  messageDiscord: '# 🚨 GriefScan Alert \n> Anti-grief system **GriefScan** triggered! \n- Offender: `%player%` \n- Filter: **%filter%** %count% times \n- Coordinates: `%world% %x% %y% %z%`'
+  messageWebsite: 'Alert: Player %player% triggered %filter% filter with %count% actions at %x% %y% %z%'
+
+# ##################################################################################
+
+filters:
+  LAVA_PLACEMENT:
+    enabled: true
+    limit: 5
+    time_window: 30
+    blocks:
+      - LAVA
+    action: notify
+    worlds:
+      - world
+    # Height limits (optional). Filter skips events outside the range.
+    # min_height: 40
+    # max_height: 320
+
+  TNT_PLACEMENT:
+    enabled: true
+    limit: 6
+    time_window: 30
+    blocks:
+      - TNT
+    action: notify
+    worlds:
+      - world
+      - world_the_end
+
+  ARSON:
+    enabled: true
+    limit: 10
+    time_window: 60
+    blocks:
+      - FIRE
+    action: notify
+    worlds:
+      - world
+
+  CHEST_BREAKING:
+    enabled: true
+    limit: 12
+    time_window: 30
+    break_blocks:
+      - CHEST
+      - BARREL
+    events:
+      - BLOCK_BREAK
+    action: notify
+
+  FRAME_BREAKING:
+    enabled: true
+    limit: 10
+    time_window: 60
+    kill_entities:
+      - ITEM_FRAME
+      - GLOW_ITEM_FRAME
+    events:
+      - ENTITY_KILL
+    action: notify
+
+  VILLAGER_KILLING:
+    enabled: true
+    limit: 3
+    time_window: 30
+    kill_entities:
+      - VILLAGER
+    events:
+      - ENTITY_KILL
+    action: notify
+
+  # Example: armor stand destruction
+  # ARMOR_STAND_BREAKING:
+  #   enabled: true
+  #   limit: 5
+  #   time_window: 60
+  #   kill_entities:
+  #     - ARMOR_STAND
+  #   events:
+  #     - ENTITY_KILL
+  #   action: notify
+
+# ##################################################################################
+
+# Anti-theft settings
+anti_theft:
+  enabled: true
+  max_distance: 50
+  min_distance: 20
+  time_window: 300
+  # min_containers — minimum take events (open container + take suspicious item)
+  min_containers: 3
+  # min_locations — minimum distinct location clusters
+  # Locations closer than min_distance count as one cluster
+  min_locations: 3
+  min_chests_distance: 30
+  suspicious_items:
+    - DIAMOND
+    - IRON_INGOT
+    - GOLD_INGOT
+    - NETHERITE_INGOT
+    - EMERALD
+  notify_admins: true
+  discord_notify: true
+  track_ender_chest: true
+  track_hopper: true
+  track_shulker_deposit: true
+  # log_actions: log every suspicious item take to console
+  log_actions: false
+  discord_message: '🚨 **Theft suspicion** Player %player% took %items% from %containers% containers across %locations% locations \n📍 Last location: %world% %x% %y% %z%'
+
+# ##################################################################################
+
+actions:
+  log_to_file: true
+
+auto_ban:
+  enabled: false
+  violations_threshold: 3
+  ban_reason: 'Automatic ban: repeated rule violations'
+  ban_command: 'ban %player% %reason%'
+  discord_alert: true
+  discord_message: '🔨 **Automatic ban** Player %player% was banned for %violations% violations. Reason: %reason%'
+
+# Players with at least this playtime are not checked
+playtime: 30h
+
+debug:
+  enabled: false
+  all: false
+  blocks: false
+  containers: false
+  entities: false
+  liquids: false
+  filters: false
+  anti_theft: false
+  auto_ban: false
