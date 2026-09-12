@@ -22,7 +22,7 @@ repositories {
  * Universal JAR strategy (same idea as ExplosionProtector):
  * - compile against Paper 1.19.4 API
  * - bytecode Java 17 so it runs on 1.19+ server JVMs
- * - plugin.yml api-version=1.19 so Paper/Spigot 1.19..1.21+ accept one download
+ * - plugin.yml api-version=1.19 so Paper/Spigot/Folia 1.19..26.1 accept one download
  */
 dependencies {
     compileOnly "io.papermc.paper:paper-api:1.19.4-R0.1-SNAPSHOT"
@@ -74,7 +74,7 @@ tasks.register('printJar') {
     doLast {
         println "JAR: ${tasks.jar.archiveFile.get().asFile}"
         println "Alias: ${layout.buildDirectory.get().asFile}/libs/GriefScan.jar"
-        println "Supports Paper/Spigot: 1.19.x, 1.20.x, 1.21.x"
+        println "Supports Paper/Spigot/Folia: 1.19.x, 1.20.x, 1.21.x, 26.1.x"
         println "Java: 17+"
     }
 }

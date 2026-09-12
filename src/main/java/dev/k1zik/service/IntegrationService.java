@@ -28,7 +28,7 @@ public class IntegrationService {
    public String teleportCommand(Player player, Location location) {
       String template = this.plugin.getConfig().getString(
             "integrations.teleport_command",
-            "/tppos %x% %y% %z%");
+            "/tp @s %x% %y% %z%");
       return apply(template, player, location);
    }
 

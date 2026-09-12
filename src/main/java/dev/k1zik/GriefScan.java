@@ -96,7 +96,7 @@ public class GriefScan extends JavaPlugin {
       this.getConfig().addDefault("exempt.uuids", java.util.List.of());
       this.getConfig().addDefault("integrations.coreprotect_lookup", "/co lookup %player% time:1d");
       this.getConfig().addDefault("integrations.litebans_history", "/litebans:history %player%");
-      this.getConfig().addDefault("integrations.teleport_command", "/tppos %x% %y% %z%");
+      this.getConfig().addDefault("integrations.teleport_command", "/tp @s %x% %y% %z%");
       this.getConfig().addDefault("integrations.kick_command", "/kick %player%");
       this.getConfig().addDefault("integrations.ban_command", "/ban %player%");
       this.getConfig().addDefault("anti_theft.track_ender_chest", true);

@@ -17,7 +17,9 @@ exempt:
 integrations:
   coreprotect_lookup: '/co lookup %player% time:1d'
   litebans_history: '/litebans:history %player%'
-  teleport_command: '/tppos %x% %y% %z%'
+  teleport_command: '/tp @s %x% %y% %z%'
+  # With EssentialsX you can use: '/tppos %x% %y% %z%'
+  # Cross-world (Paper): '/execute in %world% run tp @s %x% %y% %z%'
   kick_command: '/kick %player%'
   ban_command: '/ban %player%'
 

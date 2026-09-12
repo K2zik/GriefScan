@@ -1,6 +1,6 @@
 # GriefScan
 
-**Anti-grief scanner for suspicious player actions — one JAR for Paper/Spigot 1.19–1.21+**
+**Anti-grief scanner for suspicious player actions — one JAR for Paper/Spigot/Folia 1.19–26.1**
 
 Detects lava/TNT grief, arson, chest breaking, villager kills, and multi-location theft. Alerts staff via console, Discord, and optional website webhooks.
 
@@ -25,7 +25,7 @@ Detects lava/TNT grief, arson, chest breaking, villager kills, and multi-locatio
 4. Edit `plugins/GriefScan/config.yml` (Discord webhook, filters, etc.).
 5. Run `/griefscan reload`.
 
-**Supported servers:** Paper / Folia / Spigot — Minecraft **1.19.x, 1.20.x, 1.21.x**  
+**Supported servers:** Paper / Folia / Spigot — Minecraft **1.19.x, 1.20.x, 1.21.x, 26.1.x**  
 **Java:** 17+ (use the JVM required by your server)
 
 ### Reliability
