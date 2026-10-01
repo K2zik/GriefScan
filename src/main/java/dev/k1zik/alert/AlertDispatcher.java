@@ -4,9 +4,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import dev.k1zik.GriefScan;
-import dev.k1zik.filter.UniversalFilter;
-import dev.k1zik.notify.DiscordNotifier;
-import dev.k1zik.notify.WebNotifier;
+import dev.k1zik.filter.ScanFilter;
+import dev.k1zik.notify.DiscordWebhook;
+import dev.k1zik.notify.WebsiteWebhook;
 import dev.k1zik.service.AlertCooldownService;
 import dev.k1zik.service.IntegrationService;
 import dev.k1zik.service.MessageService;
@@ -20,21 +20,30 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 
-public class AlertManager {
+public class AlertDispatcher {
    private final GriefScan plugin;
 
-   public AlertManager(GriefScan plugin) {
+   public AlertDispatcher(GriefScan plugin) {
       this.plugin = plugin;
    }
 
-   public void triggerAlert(Player player, String filterKey, int count, UniversalFilter filter, Location location) {
-      if (this.plugin.getBypassService().isExempt(player)) {
+   public void triggerAlert(Player player, String filterKey, int count) {
+      ScanFilter filter = this.plugin.getFilterRegistry().getFilter(filterKey);
+      if (filter == null) {
+         return;
+      }
+      triggerAlert(player, filterKey, count, filter, null);
+   }
+
+   public void triggerAlert(Player player, String filterKey, int count, ScanFilter filter, Location location) {
+      if (filter == null || this.plugin.getBypassService().isExempt(player)) {
          return;
       }
 
       int triggerCooldown = this.plugin.getConfig().getInt("alerts.trigger_cooldown_seconds", 10);
       if (triggerCooldown > 0
-            && !this.plugin.getAlertCooldownService().tryAlert(player.getUniqueId(), "trigger:" + filterKey)) {
+            && !this.plugin.getAlertCooldownService().tryAlert(
+                  player.getUniqueId(), "trigger:" + filterKey, triggerCooldown)) {
          return;
       }
 
@@ -46,38 +55,7 @@ public class AlertManager {
          executeCommands(player, filter.getCommands(), location);
       }
       if (this.plugin.getConfig().getBoolean("actions.log_to_file", true)) {
-         this.plugin.getFileLogger().logViolation(player, filterKey, location);
-      }
-   }
-
-   public void triggerAlert(Player player, String filterKey, int count) {
-      UniversalFilter filter = this.plugin.getFilterManager().getFilter(filterKey);
-      if (filter != null) {
-         triggerAlert(player, filterKey, count, filter, null);
-         return;
-      }
-
-      List<String> actions = new ArrayList<>();
-      Object rawAction = this.plugin.getConfig().get("filters." + filterKey + ".action");
-      if (rawAction instanceof String singleAction) {
-         actions.add(singleAction.toLowerCase(Locale.ROOT));
-      } else if (rawAction instanceof List<?> actionList) {
-         for (Object entry : actionList) {
-            actions.add(String.valueOf(entry).toLowerCase(Locale.ROOT));
-         }
-      }
-
-      if (actions.contains("notify")) {
-         sendNotifications(player, filterKey, count, null);
-      }
-      if (actions.contains("command")) {
-         String command = this.plugin.getConfig().getString("filters." + filterKey + ".command");
-         if (command != null && !command.isEmpty()) {
-            executeCommands(player, List.of(command), null);
-         }
-      }
-      if (this.plugin.getConfig().getBoolean("actions.log_to_file", true)) {
-         this.plugin.getFileLogger().logViolation(player, filterKey, null);
+         this.plugin.getViolationLog().logViolation(player, filterKey, location);
       }
    }
 
@@ -105,11 +83,11 @@ public class AlertManager {
          String template = this.plugin.getConfig().getString(
                "notify.messageDiscord", messages.raw("alert_discord_default"));
          String body = formatMessage(template, playerName, filterKey, count, player, resolved);
-         DiscordNotifier.sendAlertEmbed(
+         DiscordWebhook.sendAlertEmbed(
                this.plugin,
                "GriefScan Alert",
                body,
-               DiscordNotifier.defaultActions(
+               DiscordWebhook.defaultActions(
                      integrations.kickCommand(player),
                      integrations.banCommand(player),
                      integrations.teleportCommand(player, resolved),
@@ -120,11 +98,26 @@ public class AlertManager {
 
       if (this.plugin.getConfig().getBoolean("notify.website", false)
             && cooldown.tryAlert(player.getUniqueId(), "website")) {
-         String template = this.plugin.getConfig().getString(
-               "notify.messageWebsite", messages.raw("alert_website_default"));
          String webhookUrl = this.plugin.getConfig().getString("notify.website_url");
          if (webhookUrl != null && !webhookUrl.isEmpty()) {
-            WebNotifier.send(this.plugin, formatMessage(template, playerName, filterKey, count, player, resolved), webhookUrl);
+            String template = this.plugin.getConfig().getString(
+                  "notify.messageWebsite", messages.raw("alert_website_default"));
+            String content = formatMessage(template, playerName, filterKey, count, player, resolved);
+            String worldName = resolved.getWorld() != null ? resolved.getWorld().getName() : "unknown";
+            WebsiteWebhook.send(
+                  this.plugin,
+                  new WebsiteWebhook.AlertPayload(
+                        content,
+                        playerName,
+                        player.getUniqueId(),
+                        filterKey,
+                        count,
+                        worldName,
+                        resolved.getBlockX(),
+                        resolved.getBlockY(),
+                        resolved.getBlockZ(),
+                        System.currentTimeMillis()),
+                  webhookUrl);
          }
       }
    }

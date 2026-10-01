@@ -11,27 +11,30 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import dev.k1zik.GriefScan;
+import dev.k1zik.util.PlaytimeUtil;
 import org.bukkit.Location;
 import org.bukkit.Statistic;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
 
-public class FilterManager {
+public class FilterRegistry {
    private final GriefScan plugin;
    private final Map<UUID, Map<String, List<Long>>> playerActions = new ConcurrentHashMap<>();
    private final double playtimeHoursLimit;
-   private final Map<String, UniversalFilter> filters = new HashMap<>();
+   private final Map<String, ScanFilter> filters = new HashMap<>();
    private final Set<String> trackedBlocks = new HashSet<>();
    private final Set<String> trackedBreakBlocks = new HashSet<>();
    private final Set<String> trackedEntities = new HashSet<>();
    private final Set<String> trackedKillEntities = new HashSet<>();
 
-   public FilterManager(GriefScan plugin) {
+   public FilterRegistry(GriefScan plugin) {
       this.plugin = plugin;
-      String rawPlaytime = plugin.getConfig().getString("playtime", "30h").replace("h", "").trim();
-      this.playtimeHoursLimit = Double.parseDouble(rawPlaytime);
-      this.loadUniversalFilters();
-      plugin.getLogger().info("FilterManager initialized. Filters loaded: " + this.filters.size());
+      this.playtimeHoursLimit = PlaytimeUtil.parseHours(
+            plugin.getConfig().getString("playtime", "30h"),
+            30.0,
+            plugin.getLogger());
+      this.loadFilters();
+      plugin.getLogger().info("FilterRegistry initialized. Filters loaded: " + this.filters.size());
    }
 
    private String normalizeFilterName(String name) {
@@ -55,7 +58,7 @@ public class FilterManager {
    }
 
    public void checkAndRecord(Player player, String eventType, String target, Location location) {
-      for (UniversalFilter filter : this.filters.values()) {
+      for (ScanFilter filter : this.filters.values()) {
          String worldName = location != null && location.getWorld() != null
                ? location.getWorld().getName()
                : null;
@@ -87,7 +90,7 @@ public class FilterManager {
          return;
       }
       String normalizedName = this.normalizeFilterName(filterName);
-      UniversalFilter filter = this.filters.get(normalizedName);
+      ScanFilter filter = this.filters.get(normalizedName);
       if (filter == null || !filter.isEnabled()) {
          return;
       }
@@ -118,8 +121,8 @@ public class FilterManager {
          this.plugin.getLogger().warning("TRIGGER: " + player.getName()
                + " | filter: " + filter.getName()
                + " | actions: " + timestamps.size());
-         if (this.plugin.getAlertManager() != null) {
-            this.plugin.getAlertManager().triggerAlert(
+         if (this.plugin.getAlertDispatcher() != null) {
+            this.plugin.getAlertDispatcher().triggerAlert(
                   player, filter.getName(), timestamps.size(), filter, location);
          }
          timestamps.clear();
@@ -130,7 +133,7 @@ public class FilterManager {
       this.recordAction(player, filterName, null);
    }
 
-   public void loadUniversalFilters() {
+   public void loadFilters() {
       this.filters.clear();
       this.trackedBlocks.clear();
       this.trackedBreakBlocks.clear();
@@ -156,7 +159,7 @@ public class FilterManager {
             int minHeight = this.plugin.getConfig().getInt("filters." + filterName + ".min_height", Integer.MIN_VALUE);
             int maxHeight = this.plugin.getConfig().getInt("filters." + filterName + ".max_height", Integer.MAX_VALUE);
 
-            UniversalFilter filter = new UniversalFilter(
+            ScanFilter filter = new ScanFilter(
                   filterName,
                   this.plugin.getConfig().getBoolean("filters." + filterName + ".enabled", true),
                   this.plugin.getConfig().getInt("filters." + filterName + ".limit", 5),
@@ -240,7 +243,7 @@ public class FilterManager {
       return this.filters.size();
    }
 
-   public Map<String, UniversalFilter> getFilters() {
+   public Map<String, ScanFilter> getFilters() {
       return new HashMap<>(this.filters);
    }
 
@@ -248,16 +251,16 @@ public class FilterManager {
       return this.filters.containsKey(this.normalizeFilterName(name));
    }
 
-   public UniversalFilter getFilter(String name) {
+   public ScanFilter getFilter(String name) {
       return this.filters.get(this.normalizeFilterName(name));
    }
 
    public void reloadFilters() {
-      this.loadUniversalFilters();
+      this.loadFilters();
       this.plugin.getLogger().info("Filters reloaded. Active: " + this.filters.size());
    }
 
-   public boolean addFilter(String name, UniversalFilter filter) {
+   public boolean addFilter(String name, ScanFilter filter) {
       String normalizedName = this.normalizeFilterName(name);
       if (this.filters.containsKey(normalizedName)) {
          return false;
@@ -267,20 +270,16 @@ public class FilterManager {
       this.trackedBreakBlocks.addAll(filter.getBreakBlocks());
       this.trackedEntities.addAll(filter.getEntities());
       this.trackedKillEntities.addAll(filter.getKillEntities());
-      this.updateConfigFilter(filter);
-      this.plugin.saveConfig();
       return true;
    }
 
    public boolean removeFilter(String name) {
       String normalizedName = this.normalizeFilterName(name);
-      UniversalFilter removed = this.filters.remove(normalizedName);
+      ScanFilter removed = this.filters.remove(normalizedName);
       if (removed == null) {
          return false;
       }
       this.rebuildCache();
-      this.plugin.getConfig().set("filters." + removed.getName(), null);
-      this.plugin.saveConfig();
       return true;
    }
 
@@ -289,31 +288,12 @@ public class FilterManager {
       this.trackedBreakBlocks.clear();
       this.trackedEntities.clear();
       this.trackedKillEntities.clear();
-      for (UniversalFilter filter : this.filters.values()) {
+      for (ScanFilter filter : this.filters.values()) {
          this.trackedBlocks.addAll(filter.getBlocks());
          this.trackedBreakBlocks.addAll(filter.getBreakBlocks());
          this.trackedEntities.addAll(filter.getEntities());
          this.trackedKillEntities.addAll(filter.getKillEntities());
       }
-   }
-
-   private void updateConfigFilter(UniversalFilter filter) {
-      String name = filter.getName();
-      this.plugin.getConfig().set("filters." + name + ".enabled", filter.isEnabled());
-      this.plugin.getConfig().set("filters." + name + ".limit", filter.getLimit());
-      this.plugin.getConfig().set("filters." + name + ".time_window", filter.getTimeWindow());
-      this.plugin.getConfig().set("filters." + name + ".action", filter.getAction());
-      this.plugin.getConfig().set("filters." + name + ".command", filter.getCommands().isEmpty() ? null : filter.getCommands());
-      this.plugin.getConfig().set("filters." + name + ".blocks", filter.getBlocks().isEmpty() ? null : filter.getBlocks());
-      this.plugin.getConfig().set("filters." + name + ".break_blocks", filter.getBreakBlocks().isEmpty() ? null : filter.getBreakBlocks());
-      this.plugin.getConfig().set("filters." + name + ".entities", filter.getEntities().isEmpty() ? null : filter.getEntities());
-      this.plugin.getConfig().set("filters." + name + ".kill_entities", filter.getKillEntities().isEmpty() ? null : filter.getKillEntities());
-      this.plugin.getConfig().set("filters." + name + ".events", filter.getEvents().isEmpty() ? null : filter.getEvents());
-      this.plugin.getConfig().set("filters." + name + ".worlds", filter.getWorlds().isEmpty() ? null : filter.getWorlds());
-      this.plugin.getConfig().set("filters." + name + ".min_height",
-            filter.getMinHeight() == Integer.MIN_VALUE ? null : filter.getMinHeight());
-      this.plugin.getConfig().set("filters." + name + ".max_height",
-            filter.getMaxHeight() == Integer.MAX_VALUE ? null : filter.getMaxHeight());
    }
 
    public boolean renameFilter(String oldName, String newName) {
@@ -323,8 +303,8 @@ public class FilterManager {
          return false;
       }
 
-      UniversalFilter oldFilter = this.filters.remove(normalizedOld);
-      UniversalFilter renamed = new UniversalFilter(
+      ScanFilter oldFilter = this.filters.remove(normalizedOld);
+      ScanFilter renamed = new ScanFilter(
             newName,
             oldFilter.isEnabled(),
             oldFilter.getLimit(),
@@ -340,9 +320,6 @@ public class FilterManager {
             oldFilter.getMinHeight(),
             oldFilter.getMaxHeight());
       this.filters.put(normalizedNew, renamed);
-      this.plugin.getConfig().set("filters." + oldFilter.getName(), null);
-      this.updateConfigFilter(renamed);
-      this.plugin.saveConfig();
       return true;
    }
 

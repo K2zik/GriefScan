@@ -15,7 +15,10 @@ public class AlertCooldownService {
    }
 
    public boolean tryAlert(UUID playerId, String channel) {
-      int cooldownSeconds = this.plugin.getConfig().getInt("alerts.cooldown_seconds", 30);
+      return tryAlert(playerId, channel, this.plugin.getConfig().getInt("alerts.cooldown_seconds", 30));
+   }
+
+   public boolean tryAlert(UUID playerId, String channel, int cooldownSeconds) {
       if (cooldownSeconds <= 0) {
          return true;
       }
@@ -27,6 +30,11 @@ public class AlertCooldownService {
       }
       this.lastAlertAt.put(key, now);
       return true;
+   }
+
+   public void clearPlayer(UUID playerId) {
+      String prefix = playerId + ":";
+      this.lastAlertAt.keySet().removeIf(key -> key.startsWith(prefix));
    }
 
    public void clear() {

@@ -6,10 +6,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-class UniversalFilterTest {
+class ScanFilterTest {
    @Test
    void matchesLavaPlacement() {
-      UniversalFilter filter = new UniversalFilter(
+      ScanFilter filter = new ScanFilter(
             "LAVA_PLACEMENT",
             true,
             5,
@@ -31,7 +31,7 @@ class UniversalFilterTest {
 
    @Test
    void respectsHeightLimits() {
-      UniversalFilter filter = new UniversalFilter(
+      ScanFilter filter = new ScanFilter(
             "LAVA_PLACEMENT",
             true,
             5,
@@ -56,7 +56,7 @@ class UniversalFilterTest {
 
    @Test
    void matchesEntityKillFrames() {
-      UniversalFilter filter = new UniversalFilter(
+      ScanFilter filter = new ScanFilter(
             "FRAME_BREAKING",
             true,
             10,

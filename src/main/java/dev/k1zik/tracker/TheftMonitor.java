@@ -17,9 +17,10 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import dev.k1zik.GriefScan;
-import dev.k1zik.notify.DiscordNotifier;
+import dev.k1zik.notify.DiscordWebhook;
 import dev.k1zik.service.MessageService;
 import dev.k1zik.util.LocationClusterUtil;
+import dev.k1zik.util.PlaytimeUtil;
 import dev.k1zik.util.SchedulerUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -29,7 +30,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 
-public class AntiTheftTracker {
+public class TheftMonitor {
    private final GriefScan plugin;
    private final Map<UUID, Map<String, ItemStack[]>> inventorySnapshots = new ConcurrentHashMap<>();
    private final Map<UUID, List<TheftEvent>> theftHistory = new ConcurrentHashMap<>();
@@ -46,10 +47,10 @@ public class AntiTheftTracker {
    private String discordMessage;
    private boolean logActions;
 
-   public AntiTheftTracker(GriefScan plugin) {
+   public TheftMonitor(GriefScan plugin) {
       this.plugin = plugin;
       loadConfig();
-      plugin.getLogger().info("AntiTheftTracker initialized");
+      plugin.getLogger().info("TheftMonitor initialized");
    }
 
    public void loadConfig() {
@@ -68,13 +69,10 @@ public class AntiTheftTracker {
             "anti_theft.discord_message",
             "🚨 **Theft suspicion** Player %player% took %items% from %containers% containers across %locations% locations \\n📍 Last location: %world% %x% %y% %z%");
 
-      String rawPlaytime = this.plugin.getConfig().getString("playtime", "30h").replace("h", "").trim();
-      try {
-         this.playtimeHoursLimit = Double.parseDouble(rawPlaytime);
-      } catch (NumberFormatException ignored) {
-         this.playtimeHoursLimit = 30.0;
-         this.plugin.getLogger().warning("[AntiTheft] Invalid playtime format, using 30h");
-      }
+      this.playtimeHoursLimit = PlaytimeUtil.parseHours(
+            this.plugin.getConfig().getString("playtime", "30h"),
+            30.0,
+            this.plugin.getLogger());
 
       this.logActions = this.plugin.getConfig().getBoolean("anti_theft.log_actions", false);
       this.suspiciousItems = new HashSet<>();
@@ -287,11 +285,11 @@ public class AntiTheftTracker {
                .replace("%y%", y)
                .replace("%z%", z);
          var integrations = this.plugin.getIntegrationService();
-         DiscordNotifier.sendAlertEmbed(
+         DiscordWebhook.sendAlertEmbed(
                this.plugin,
                "GriefScan Theft Alert",
                discordText,
-               DiscordNotifier.defaultActions(
+               DiscordWebhook.defaultActions(
                      integrations.kickCommand(player),
                      integrations.banCommand(player),
                      integrations.teleportCommand(player, lastLocation),

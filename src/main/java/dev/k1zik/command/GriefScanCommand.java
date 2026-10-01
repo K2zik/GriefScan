@@ -10,8 +10,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import dev.k1zik.GriefScan;
-import dev.k1zik.filter.UniversalFilter;
-import dev.k1zik.logging.FileLogger;
+import dev.k1zik.filter.ScanFilter;
+import dev.k1zik.logging.ViolationLog;
 import dev.k1zik.service.MessageService;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
@@ -23,10 +23,10 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.util.StringUtil;
 
-public class CommandHandler implements CommandExecutor, TabCompleter {
+public class GriefScanCommand implements CommandExecutor, TabCompleter {
    private final GriefScan plugin;
 
-   public CommandHandler(GriefScan plugin) {
+   public GriefScanCommand(GriefScan plugin) {
       this.plugin = plugin;
    }
 
@@ -63,7 +63,7 @@ public class CommandHandler implements CommandExecutor, TabCompleter {
 
    private void handleStatus(CommandSender sender) {
       sender.sendMessage(this.msg().msg("status_filters_header"));
-      for (UniversalFilter filter : this.plugin.getFilterManager().getFilters().values()) {
+      for (ScanFilter filter : this.plugin.getFilterRegistry().getFilters().values()) {
          String worldsInfo = "";
          if (!filter.getWorlds().isEmpty()) {
             worldsInfo = this.msg().format("status_worlds", "worlds", String.join(", ", filter.getWorlds()));
@@ -78,10 +78,10 @@ public class CommandHandler implements CommandExecutor, TabCompleter {
       boolean logging = this.plugin.getConfig().getBoolean("actions.log_to_file", true);
       sender.sendMessage(this.msg().format("status_logging",
             "state", logging ? this.msg().msg("state_on") : this.msg().msg("state_off")));
-      if (this.plugin.getFileLogger() != null) {
-         int totalPlayers = this.plugin.getFileLogger().getAllStats().size();
-         int totalViolations = this.plugin.getFileLogger().getAllStats().values().stream()
-               .mapToInt(FileLogger.PlayerViolationStats::getTotalViolations).sum();
+      if (this.plugin.getViolationLog() != null) {
+         int totalPlayers = this.plugin.getViolationLog().getAllStats().size();
+         int totalViolations = this.plugin.getViolationLog().getAllStats().values().stream()
+               .mapToInt(ViolationLog.PlayerViolationStats::getTotalViolations).sum();
          sender.sendMessage(this.msg().format("status_players", "count", String.valueOf(totalPlayers)));
          sender.sendMessage(this.msg().format("status_violations", "count", String.valueOf(totalViolations)));
       }
@@ -94,14 +94,14 @@ public class CommandHandler implements CommandExecutor, TabCompleter {
       }
 
       String filterArg = String.join(" ", Arrays.copyOfRange(args, 1, args.length));
-      if (!this.plugin.getFilterManager().hasFilter(filterArg)) {
+      if (!this.plugin.getFilterRegistry().hasFilter(filterArg)) {
          sender.sendMessage(this.msg().format("toggle_not_found", "filter", filterArg));
          sender.sendMessage(this.msg().format("toggle_available", "filters",
-               String.join("§7, §f", this.plugin.getFilterManager().getFilters().keySet())));
+               String.join("§7, §f", this.plugin.getFilterRegistry().getFilters().keySet())));
          return;
       }
 
-      UniversalFilter filterObj = this.plugin.getFilterManager().getFilter(filterArg);
+      ScanFilter filterObj = this.plugin.getFilterRegistry().getFilter(filterArg);
       if (filterObj == null) {
          sender.sendMessage(this.msg().format("toggle_not_found", "filter", filterArg));
          return;
@@ -118,7 +118,7 @@ public class CommandHandler implements CommandExecutor, TabCompleter {
          diskConfig.save(configFile);
          this.plugin.reloadConfig();
          this.plugin.applyConfigDefaults();
-         this.plugin.getFilterManager().reloadFilters();
+         this.plugin.getFilterRegistry().reloadFilters();
          sender.sendMessage(this.msg().format("toggle_ok",
                "filter", originalFilterName,
                "state", newState ? this.msg().msg("state_on") : this.msg().msg("state_off")));
@@ -136,8 +136,8 @@ public class CommandHandler implements CommandExecutor, TabCompleter {
 
       switch (args[1].toLowerCase()) {
          case "report" -> {
-            if (this.plugin.getFileLogger() != null) {
-               this.plugin.getFileLogger().generateReport();
+            if (this.plugin.getViolationLog() != null) {
+               this.plugin.getViolationLog().generateReport();
                sender.sendMessage(this.msg().msg("logs_report_ok"));
             } else {
                sender.sendMessage(this.msg().msg("logs_not_init"));
@@ -146,27 +146,27 @@ public class CommandHandler implements CommandExecutor, TabCompleter {
          case "clear" -> {
             if (args.length >= 3) {
                String playerName = args[2];
-               FileLogger.PlayerViolationStats stats = this.findPlayerStatsByName(playerName);
+               ViolationLog.PlayerViolationStats stats = this.findPlayerStatsByName(playerName);
                if (stats == null) {
                   sender.sendMessage(this.msg().msg("logs_player_not_found"));
                   return;
                }
                UUID playerUUID = null;
-               for (Map.Entry<UUID, FileLogger.PlayerViolationStats> entry : this.plugin.getFileLogger().getAllStats().entrySet()) {
+               for (Map.Entry<UUID, ViolationLog.PlayerViolationStats> entry : this.plugin.getViolationLog().getAllStats().entrySet()) {
                   if (entry.getValue().getPlayerName().equalsIgnoreCase(playerName)) {
                      playerUUID = entry.getKey();
                      break;
                   }
                }
                if (playerUUID != null) {
-                  this.plugin.getFileLogger().clearPlayerStats(playerUUID);
-                  this.plugin.getLimitTracker().clearPlayer(playerUUID);
+                  this.plugin.getViolationLog().clearPlayerStats(playerUUID);
+                  this.plugin.clearPlayerRuntimeState(playerUUID);
                   sender.sendMessage(this.msg().format("logs_player_cleared", "player", stats.getPlayerName()));
                } else {
                   sender.sendMessage(this.msg().msg("logs_player_uuid_missing"));
                }
-            } else if (this.plugin.getFileLogger() != null) {
-               this.plugin.getFileLogger().clearAllStats();
+            } else if (this.plugin.getViolationLog() != null) {
+               this.plugin.getViolationLog().clearAllStats();
                sender.sendMessage(this.msg().msg("logs_all_cleared"));
             } else {
                sender.sendMessage(this.msg().msg("logs_not_init"));
@@ -178,18 +178,18 @@ public class CommandHandler implements CommandExecutor, TabCompleter {
    }
 
    private void handleLogsStats(CommandSender sender, String[] args) {
-      if (this.plugin.getFileLogger() == null) {
+      if (this.plugin.getViolationLog() == null) {
          sender.sendMessage(this.msg().msg("logs_not_init"));
          return;
       }
 
       if (args.length >= 3) {
          String playerName = args[2];
-         FileLogger.PlayerViolationStats stats = this.findPlayerStatsByName(playerName);
+         ViolationLog.PlayerViolationStats stats = this.findPlayerStatsByName(playerName);
          if (stats == null) {
             Player onlinePlayer = Bukkit.getPlayer(playerName);
             if (onlinePlayer != null) {
-               stats = this.plugin.getFileLogger().getPlayerStats(onlinePlayer.getUniqueId());
+               stats = this.plugin.getViolationLog().getPlayerStats(onlinePlayer.getUniqueId());
             }
             if (stats == null) {
                sender.sendMessage(this.msg().format("logs_no_violations_player", "player", playerName));
@@ -226,7 +226,7 @@ public class CommandHandler implements CommandExecutor, TabCompleter {
          return;
       }
 
-      Map<UUID, FileLogger.PlayerViolationStats> allStats = this.plugin.getFileLogger().getAllStats();
+      Map<UUID, ViolationLog.PlayerViolationStats> allStats = this.plugin.getViolationLog().getAllStats();
       if (allStats.isEmpty()) {
          sender.sendMessage(this.msg().msg("logs_none"));
          return;
@@ -234,7 +234,7 @@ public class CommandHandler implements CommandExecutor, TabCompleter {
 
       sender.sendMessage(this.msg().msg("logs_overall_header"));
       sender.sendMessage(this.msg().format("logs_players_total", "count", String.valueOf(allStats.size())));
-      int totalViolations = allStats.values().stream().mapToInt(FileLogger.PlayerViolationStats::getTotalViolations).sum();
+      int totalViolations = allStats.values().stream().mapToInt(ViolationLog.PlayerViolationStats::getTotalViolations).sum();
       sender.sendMessage(this.msg().format("status_violations", "count", String.valueOf(totalViolations)));
       sender.sendMessage(this.msg().msg("logs_top"));
       allStats.entrySet().stream()
@@ -251,7 +251,7 @@ public class CommandHandler implements CommandExecutor, TabCompleter {
    }
 
    private void handleAntiTheft(CommandSender sender, String[] args) {
-      if (this.plugin.getAntiTheftTracker() == null) {
+      if (this.plugin.getTheftMonitor() == null) {
          sender.sendMessage(this.msg().msg("antitheft_not_init"));
          return;
       }
@@ -284,11 +284,11 @@ public class CommandHandler implements CommandExecutor, TabCompleter {
                sender.sendMessage(this.msg().msg("antitheft_player_not_found"));
                return;
             }
-            this.plugin.getAntiTheftTracker().clearPlayerHistory(target.getUniqueId());
+            this.plugin.getTheftMonitor().clearPlayerHistory(target.getUniqueId());
             sender.sendMessage(this.msg().format("antitheft_cleared", "player", target.getName()));
          }
          case "clearall" -> {
-            this.plugin.getAntiTheftTracker().clearAllHistory();
+            this.plugin.getTheftMonitor().clearAllHistory();
             sender.sendMessage(this.msg().msg("antitheft_cleared_all"));
          }
          default -> sender.sendMessage(this.msg().msg("antitheft_usage"));
@@ -313,10 +313,10 @@ public class CommandHandler implements CommandExecutor, TabCompleter {
          return;
       }
       String playerName = args[1];
-      FileLogger.SessionSummary session = this.plugin.getFileLogger().findSessionByName(playerName);
+      ViolationLog.SessionSummary session = this.plugin.getViolationLog().findSessionByName(playerName);
       Player online = Bukkit.getPlayer(playerName);
       if (session == null && online != null) {
-         session = this.plugin.getFileLogger().getSessionSummary(online.getUniqueId());
+         session = this.plugin.getViolationLog().getSessionSummary(online.getUniqueId());
       }
       if (session == null) {
          sender.sendMessage(this.msg().format("inspect_none", "player", playerName));
@@ -342,9 +342,9 @@ public class CommandHandler implements CommandExecutor, TabCompleter {
                sender.sendMessage(this.msg().format("logs_filter_entry", "filter", filter, "count", String.valueOf(count))));
       }
 
-      FileLogger.PlayerViolationStats lifetime = null;
+      ViolationLog.PlayerViolationStats lifetime = null;
       if (online != null) {
-         lifetime = this.plugin.getFileLogger().getPlayerStats(online.getUniqueId());
+         lifetime = this.plugin.getViolationLog().getPlayerStats(online.getUniqueId());
       } else {
          lifetime = this.findPlayerStatsByName(playerName);
       }
@@ -353,17 +353,17 @@ public class CommandHandler implements CommandExecutor, TabCompleter {
       }
    }
 
-   private FileLogger.PlayerViolationStats findPlayerStatsByName(String playerName) {
-      if (this.plugin.getFileLogger() == null) {
+   private ViolationLog.PlayerViolationStats findPlayerStatsByName(String playerName) {
+      if (this.plugin.getViolationLog() == null) {
          return null;
       }
-      Map<UUID, FileLogger.PlayerViolationStats> allStats = this.plugin.getFileLogger().getAllStats();
-      for (FileLogger.PlayerViolationStats stats : allStats.values()) {
+      Map<UUID, ViolationLog.PlayerViolationStats> allStats = this.plugin.getViolationLog().getAllStats();
+      for (ViolationLog.PlayerViolationStats stats : allStats.values()) {
          if (stats.getPlayerName().equals(playerName)) {
             return stats;
          }
       }
-      for (FileLogger.PlayerViolationStats stats : allStats.values()) {
+      for (ViolationLog.PlayerViolationStats stats : allStats.values()) {
          if (stats.getPlayerName().equalsIgnoreCase(playerName)) {
             return stats;
          }
@@ -405,8 +405,8 @@ public class CommandHandler implements CommandExecutor, TabCompleter {
       } else if (args.length == 3) {
          if (args[0].equalsIgnoreCase("logs") && (args[1].equalsIgnoreCase("clear") || args[1].equalsIgnoreCase("stats"))) {
             List<String> playerNames = new ArrayList<>();
-            if (this.plugin.getFileLogger() != null) {
-               for (FileLogger.PlayerViolationStats stats : this.plugin.getFileLogger().getAllStats().values()) {
+            if (this.plugin.getViolationLog() != null) {
+               for (ViolationLog.PlayerViolationStats stats : this.plugin.getViolationLog().getAllStats().values()) {
                   playerNames.add(stats.getPlayerName());
                }
             }

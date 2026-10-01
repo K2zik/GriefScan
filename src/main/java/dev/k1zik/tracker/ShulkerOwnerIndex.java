@@ -10,12 +10,12 @@ import dev.k1zik.util.SchedulerUtil;
 import org.bukkit.Location;
 import org.bukkit.configuration.file.YamlConfiguration;
 
-public class ShulkerOwnership {
+public class ShulkerOwnerIndex {
    private final GriefScan plugin;
    private final Map<String, UUID> ownership = new ConcurrentHashMap<>();
    private final File dataFile;
 
-   public ShulkerOwnership(GriefScan plugin) {
+   public ShulkerOwnerIndex(GriefScan plugin) {
       this.plugin = plugin;
       this.dataFile = new File(plugin.getDataFolder(), "shulker_owners.yml");
       load();
@@ -79,12 +79,12 @@ public class ShulkerOwnership {
             try {
                this.ownership.put(key, UUID.fromString(uuidText));
             } catch (IllegalArgumentException ignored) {
-               this.plugin.getLogger().warning("[ShulkerOwnership] Invalid UUID entry: " + key);
+               this.plugin.getLogger().warning("[ShulkerOwnerIndex] Invalid UUID entry: " + key);
             }
          }
-         this.plugin.getLogger().info("[ShulkerOwnership] Loaded entries: " + this.ownership.size());
+         this.plugin.getLogger().info("[ShulkerOwnerIndex] Loaded entries: " + this.ownership.size());
       } catch (Exception exception) {
-         this.plugin.getLogger().warning("[ShulkerOwnership] Load error: " + exception.getMessage());
+         this.plugin.getLogger().warning("[ShulkerOwnerIndex] Load error: " + exception.getMessage());
       }
    }
 
@@ -109,7 +109,7 @@ public class ShulkerOwnership {
          }
          yaml.save(this.dataFile);
       } catch (IOException exception) {
-         this.plugin.getLogger().warning("[ShulkerOwnership] Save error: " + exception.getMessage());
+         this.plugin.getLogger().warning("[ShulkerOwnerIndex] Save error: " + exception.getMessage());
       }
    }
 }

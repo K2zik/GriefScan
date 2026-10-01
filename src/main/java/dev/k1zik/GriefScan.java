@@ -2,18 +2,18 @@ package dev.k1zik;
 
 import java.io.File;
 import java.io.IOException;
-import dev.k1zik.alert.AlertManager;
-import dev.k1zik.command.CommandHandler;
-import dev.k1zik.filter.FilterManager;
-import dev.k1zik.listener.UniversalListener;
-import dev.k1zik.logging.FileLogger;
+import java.util.UUID;
+import dev.k1zik.alert.AlertDispatcher;
+import dev.k1zik.command.GriefScanCommand;
+import dev.k1zik.filter.FilterRegistry;
+import dev.k1zik.listener.PlayerEventListener;
+import dev.k1zik.logging.ViolationLog;
 import dev.k1zik.service.AlertCooldownService;
 import dev.k1zik.service.BypassService;
 import dev.k1zik.service.IntegrationService;
 import dev.k1zik.service.MessageService;
-import dev.k1zik.tracker.AntiTheftTracker;
-import dev.k1zik.tracker.PlayerActionTracker;
-import dev.k1zik.tracker.ShulkerOwnership;
+import dev.k1zik.tracker.TheftMonitor;
+import dev.k1zik.tracker.ShulkerOwnerIndex;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -24,12 +24,11 @@ public class GriefScan extends JavaPlugin {
    private BypassService bypassService;
    private AlertCooldownService alertCooldownService;
    private IntegrationService integrationService;
-   private FilterManager filterManager;
-   private AlertManager alertManager;
-   private PlayerActionTracker limitTracker;
-   private FileLogger fileLogger;
-   private AntiTheftTracker antiTheftTracker;
-   private ShulkerOwnership shulkerOwnership;
+   private FilterRegistry filterRegistry;
+   private AlertDispatcher alertDispatcher;
+   private ViolationLog violationLog;
+   private TheftMonitor theftMonitor;
+   private ShulkerOwnerIndex shulkerOwnerIndex;
 
    @Override
    public void onEnable() {
@@ -42,25 +41,24 @@ public class GriefScan extends JavaPlugin {
       this.bypassService = new BypassService(this);
       this.alertCooldownService = new AlertCooldownService(this);
       this.integrationService = new IntegrationService(this);
-      this.filterManager = new FilterManager(this);
-      this.alertManager = new AlertManager(this);
-      this.limitTracker = new PlayerActionTracker(this);
-      this.fileLogger = new FileLogger(this);
-      this.shulkerOwnership = new ShulkerOwnership(this);
-      this.antiTheftTracker = new AntiTheftTracker(this);
+      this.filterRegistry = new FilterRegistry(this);
+      this.alertDispatcher = new AlertDispatcher(this);
+      this.violationLog = new ViolationLog(this);
+      this.shulkerOwnerIndex = new ShulkerOwnerIndex(this);
+      this.theftMonitor = new TheftMonitor(this);
 
       PluginCommand cmd = this.getCommand("griefscan");
       if (cmd == null) {
          this.getLogger().severe(this.messageService.msg("command_missing"));
       } else {
-         CommandHandler commandHandler = new CommandHandler(this);
-         cmd.setExecutor(commandHandler);
-         cmd.setTabCompleter(commandHandler);
+         GriefScanCommand command = new GriefScanCommand(this);
+         cmd.setExecutor(command);
+         cmd.setTabCompleter(command);
          this.getLogger().info(this.messageService.msg("command_registered"));
       }
 
       try {
-         this.getServer().getPluginManager().registerEvents(new UniversalListener(this), this);
+         this.getServer().getPluginManager().registerEvents(new PlayerEventListener(this), this);
          this.getLogger().info(this.messageService.msg("listener_registered"));
       } catch (Exception exception) {
          this.getLogger().severe(this.messageService.format("listener_error", "error", exception.getMessage()));
@@ -72,7 +70,7 @@ public class GriefScan extends JavaPlugin {
       this.getLogger().info("==========================================");
       this.getLogger().info(this.messageService.msg("enabled_banner"));
       this.getLogger().info(this.messageService.format("filters_loaded", "count",
-            String.valueOf(this.filterManager.getLoadedFiltersCount())));
+            String.valueOf(this.filterRegistry.getLoadedFiltersCount())));
       this.getLogger().info(this.messageService.format("logging_status", "status",
             this.getConfig().getBoolean("actions.log_to_file", true) ? on : off));
       boolean autoBanEnabled = this.getConfig().getBoolean("auto_ban.enabled", false);
@@ -114,20 +112,20 @@ public class GriefScan extends JavaPlugin {
 
    @Override
    public void onDisable() {
-      if (this.fileLogger != null) {
+      if (this.violationLog != null) {
          try {
-            this.fileLogger.generateReport();
+            this.violationLog.generateReport();
          } catch (Exception exception) {
             this.getLogger().warning(this.messageService != null
                   ? this.messageService.format("report_error", "error", exception.getMessage())
                   : "Failed to generate report: " + exception.getMessage());
          }
-         this.fileLogger.close();
+         this.violationLog.close();
       }
 
-      if (this.shulkerOwnership != null) {
+      if (this.shulkerOwnerIndex != null) {
          try {
-            this.shulkerOwnership.saveSync();
+            this.shulkerOwnerIndex.saveSync();
          } catch (Exception exception) {
             this.getLogger().warning(this.messageService != null
                   ? this.messageService.format("shulker_save_error", "error", exception.getMessage())
@@ -160,28 +158,36 @@ public class GriefScan extends JavaPlugin {
       return this.integrationService;
    }
 
-   public FilterManager getFilterManager() {
-      return this.filterManager;
+   public FilterRegistry getFilterRegistry() {
+      return this.filterRegistry;
    }
 
-   public AlertManager getAlertManager() {
-      return this.alertManager;
+   public AlertDispatcher getAlertDispatcher() {
+      return this.alertDispatcher;
    }
 
-   public PlayerActionTracker getLimitTracker() {
-      return this.limitTracker;
+   public ViolationLog getViolationLog() {
+      return this.violationLog;
    }
 
-   public FileLogger getFileLogger() {
-      return this.fileLogger;
+   public void clearPlayerRuntimeState(UUID playerId) {
+      if (this.filterRegistry != null) {
+         this.filterRegistry.clearAllPlayerActions(playerId);
+      }
+      if (this.theftMonitor != null) {
+         this.theftMonitor.clearPlayerHistory(playerId);
+      }
+      if (this.alertCooldownService != null) {
+         this.alertCooldownService.clearPlayer(playerId);
+      }
    }
 
-   public AntiTheftTracker getAntiTheftTracker() {
-      return this.antiTheftTracker;
+   public TheftMonitor getTheftMonitor() {
+      return this.theftMonitor;
    }
 
-   public ShulkerOwnership getShulkerOwnership() {
-      return this.shulkerOwnership;
+   public ShulkerOwnerIndex getShulkerOwnerIndex() {
+      return this.shulkerOwnerIndex;
    }
 
    public void reloadSystem() {
@@ -193,14 +199,14 @@ public class GriefScan extends JavaPlugin {
       if (this.alertCooldownService != null) {
          this.alertCooldownService.clear();
       }
-      if (this.filterManager != null) {
-         this.filterManager.loadUniversalFilters();
+      if (this.filterRegistry != null) {
+         this.filterRegistry.loadFilters();
       }
-      if (this.antiTheftTracker != null) {
-         this.antiTheftTracker.reloadConfig();
+      if (this.theftMonitor != null) {
+         this.theftMonitor.reloadConfig();
       }
       this.getLogger().info(this.messageService.format("config_reloaded_log", "count",
-            String.valueOf(this.filterManager != null ? this.filterManager.getLoadedFiltersCount() : 0)));
+            String.valueOf(this.filterRegistry != null ? this.filterRegistry.getLoadedFiltersCount() : 0)));
    }
 
    public boolean setLanguage(String lang) {

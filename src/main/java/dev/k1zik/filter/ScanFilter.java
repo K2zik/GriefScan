@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-public class UniversalFilter {
+public class ScanFilter {
    private final String name;
    private final boolean enabled;
    private final int limit;
@@ -20,7 +20,7 @@ public class UniversalFilter {
    private final int minHeight;
    private final int maxHeight;
 
-   public UniversalFilter(
+   public ScanFilter(
          String name,
          boolean enabled,
          int limit,
@@ -51,7 +51,7 @@ public class UniversalFilter {
       this.maxHeight = maxHeight;
    }
 
-   public UniversalFilter(
+   public ScanFilter(
          String name,
          boolean enabled,
          int limit,
@@ -198,7 +198,7 @@ public class UniversalFilter {
 
    @Override
    public String toString() {
-      return "UniversalFilter{name='" + this.name
+      return "ScanFilter{name='" + this.name
             + "', enabled=" + this.enabled
             + ", limit=" + this.limit
             + ", timeWindow=" + this.timeWindow

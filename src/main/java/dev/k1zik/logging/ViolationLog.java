@@ -14,14 +14,14 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import dev.k1zik.GriefScan;
-import dev.k1zik.notify.DiscordNotifier;
+import dev.k1zik.notify.DiscordWebhook;
 import dev.k1zik.storage.ViolationDatabase;
 import dev.k1zik.util.SchedulerUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 
-public class FileLogger {
+public class ViolationLog {
    private final GriefScan plugin;
    private final String logFileName = "logs.log";
    private final Map<UUID, PlayerViolationStats> playerStats = new ConcurrentHashMap<>();
@@ -29,7 +29,7 @@ public class FileLogger {
    private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
    private ViolationDatabase database;
 
-   public FileLogger(GriefScan plugin) {
+   public ViolationLog(GriefScan plugin) {
       this.plugin = plugin;
       initializeDatabase();
       initializeLogFile();
@@ -192,7 +192,7 @@ public class FileLogger {
                .replace("%player%", playerName)
                .replace("%violations%", String.valueOf(stats.getTotalViolations()))
                .replace("%reason%", banReason);
-         DiscordNotifier.send(this.plugin, discordMessage);
+         DiscordWebhook.send(this.plugin, discordMessage);
       }
 
       clearPlayerStats(playerId);

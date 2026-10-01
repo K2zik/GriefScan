@@ -29,20 +29,21 @@ import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.player.PlayerBucketEmptyEvent;
 import org.bukkit.event.player.PlayerBucketFillEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.DoubleChestInventory;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.projectiles.ProjectileSource;
 
-public class UniversalListener implements Listener {
+public class PlayerEventListener implements Listener {
    private static final BlockFace[] HORIZONTAL_FACES = {
          BlockFace.NORTH, BlockFace.SOUTH, BlockFace.EAST, BlockFace.WEST
    };
 
    private final GriefScan plugin;
 
-   public UniversalListener(GriefScan plugin) {
+   public PlayerEventListener(GriefScan plugin) {
       this.plugin = plugin;
    }
 
@@ -78,13 +79,13 @@ public class UniversalListener implements Listener {
       String debugCategory = blockType.contains("LAVA") || blockType.contains("WATER") ? "liquids" : "blocks";
       this.debugLog(debugCategory, "Placed: " + blockType + " by " + player.getName());
 
-      if (blockType.contains("SHULKER_BOX") && this.plugin.getShulkerOwnership() != null) {
-         this.plugin.getShulkerOwnership().registerOwner(location, player.getUniqueId());
+      if (blockType.contains("SHULKER_BOX") && this.plugin.getShulkerOwnerIndex() != null) {
+         this.plugin.getShulkerOwnerIndex().registerOwner(location, player.getUniqueId());
       }
 
-      if (this.plugin.getFilterManager().shouldTrackBlock(blockType)) {
+      if (this.plugin.getFilterRegistry().shouldTrackBlock(blockType)) {
          this.filterLog("BLOCK_PLACE " + blockType + " | " + player.getName());
-         this.plugin.getFilterManager().checkAndRecord(player, "BLOCK_PLACE", blockType, location);
+         this.plugin.getFilterRegistry().checkAndRecord(player, "BLOCK_PLACE", blockType, location);
       }
    }
 
@@ -96,9 +97,9 @@ public class UniversalListener implements Listener {
       this.debugLog("liquids", "Bucket emptied: " + bucketType + " by " + player.getName());
 
       String blockType = bucketType.replace("_BUCKET", "");
-      if (this.plugin.getFilterManager().shouldTrackBlock(blockType)) {
+      if (this.plugin.getFilterRegistry().shouldTrackBlock(blockType)) {
          this.filterLog("BUCKET_EMPTY " + bucketType + " -> " + blockType + " | " + player.getName());
-         this.plugin.getFilterManager().checkAndRecord(player, "BLOCK_PLACE", blockType, location);
+         this.plugin.getFilterRegistry().checkAndRecord(player, "BLOCK_PLACE", blockType, location);
       }
    }
 
@@ -111,13 +112,13 @@ public class UniversalListener implements Listener {
             ? "containers" : "blocks";
       this.debugLog(debugCategory, "Broken: " + blockType + " by " + player.getName());
 
-      if (blockType.contains("SHULKER_BOX") && this.plugin.getShulkerOwnership() != null) {
-         this.plugin.getShulkerOwnership().removeOwner(location);
+      if (blockType.contains("SHULKER_BOX") && this.plugin.getShulkerOwnerIndex() != null) {
+         this.plugin.getShulkerOwnerIndex().removeOwner(location);
       }
 
-      if (this.plugin.getFilterManager().shouldTrackBreakBlock(blockType)) {
+      if (this.plugin.getFilterRegistry().shouldTrackBreakBlock(blockType)) {
          this.filterLog("BLOCK_BREAK " + blockType + " | " + player.getName());
-         this.plugin.getFilterManager().checkAndRecord(player, "BLOCK_BREAK", blockType, location);
+         this.plugin.getFilterRegistry().checkAndRecord(player, "BLOCK_BREAK", blockType, location);
       }
    }
 
@@ -132,9 +133,9 @@ public class UniversalListener implements Listener {
       Location location = event.getEntity().getLocation();
       this.debugLog("entities", "Entity placed: " + entityType + " by " + player.getName());
 
-      if (this.plugin.getFilterManager().shouldTrackEntity(entityType)) {
+      if (this.plugin.getFilterRegistry().shouldTrackEntity(entityType)) {
          this.filterLog("ENTITY_PLACE " + entityType + " | " + player.getName());
-         this.plugin.getFilterManager().checkAndRecord(player, "ENTITY_PLACE", entityType, location);
+         this.plugin.getFilterRegistry().checkAndRecord(player, "ENTITY_PLACE", entityType, location);
       }
    }
 
@@ -149,9 +150,9 @@ public class UniversalListener implements Listener {
       Location location = event.getEntity().getLocation();
       this.debugLog("entities", "Hanging placed: " + entityType + " by " + player.getName());
 
-      if (this.plugin.getFilterManager().shouldTrackEntity(entityType)) {
+      if (this.plugin.getFilterRegistry().shouldTrackEntity(entityType)) {
          this.filterLog("HANGING_PLACE " + entityType + " | " + player.getName());
-         this.plugin.getFilterManager().checkAndRecord(player, "ENTITY_PLACE", entityType, location);
+         this.plugin.getFilterRegistry().checkAndRecord(player, "ENTITY_PLACE", entityType, location);
       }
    }
 
@@ -166,9 +167,9 @@ public class UniversalListener implements Listener {
       Location location = event.getEntity().getLocation();
       this.debugLog("entities", "Entity killed: " + entityType + " by " + killer.getName());
 
-      if (this.plugin.getFilterManager().shouldTrackKillEntity(entityType)) {
+      if (this.plugin.getFilterRegistry().shouldTrackKillEntity(entityType)) {
          this.filterLog("ENTITY_KILL " + entityType + " | " + killer.getName());
-         this.plugin.getFilterManager().checkAndRecord(killer, "ENTITY_KILL", entityType, location);
+         this.plugin.getFilterRegistry().checkAndRecord(killer, "ENTITY_KILL", entityType, location);
       }
    }
 
@@ -207,9 +208,9 @@ public class UniversalListener implements Listener {
       Location location = event.getEntity().getLocation();
       this.debugLog("entities", "Hanging broken: " + entityType + " by " + player.getName());
 
-      if (this.plugin.getFilterManager().shouldTrackKillEntity(entityType)) {
+      if (this.plugin.getFilterRegistry().shouldTrackKillEntity(entityType)) {
          this.filterLog("HANGING_BREAK " + entityType + " | " + player.getName());
-         this.plugin.getFilterManager().checkAndRecord(player, "ENTITY_KILL", entityType, location);
+         this.plugin.getFilterRegistry().checkAndRecord(player, "ENTITY_KILL", entityType, location);
       }
    }
 
@@ -234,16 +235,16 @@ public class UniversalListener implements Listener {
       this.antiTheftLog("Opened: " + material.name() + " | " + player.getName());
 
       boolean ownShulker = material.name().contains("SHULKER_BOX")
-            && this.plugin.getShulkerOwnership() != null
-            && this.plugin.getShulkerOwnership().isOwner(location, player.getUniqueId());
+            && this.plugin.getShulkerOwnerIndex() != null
+            && this.plugin.getShulkerOwnerIndex().isOwner(location, player.getUniqueId());
 
-      if (this.plugin.getAntiTheftTracker() != null && !ownShulker) {
-         this.plugin.getAntiTheftTracker().onContainerOpen(player, location);
+      if (this.plugin.getTheftMonitor() != null && !ownShulker) {
+         this.plugin.getTheftMonitor().onContainerOpen(player, location);
          if (material == Material.CHEST || material == Material.TRAPPED_CHEST) {
             for (BlockFace face : HORIZONTAL_FACES) {
                Block neighbor = block.getRelative(face);
                if (neighbor.getType() == material) {
-                  this.plugin.getAntiTheftTracker().onContainerOpen(player, neighbor.getLocation());
+                  this.plugin.getTheftMonitor().onContainerOpen(player, neighbor.getLocation());
                   break;
                }
             }
@@ -254,8 +255,8 @@ public class UniversalListener implements Listener {
       }
 
       String blockTypeName = material.name();
-      if (this.plugin.getFilterManager().shouldTrackBlock(blockTypeName)) {
-         this.plugin.getFilterManager().checkAndRecord(player, "CONTAINER_OPEN", blockTypeName, location);
+      if (this.plugin.getFilterRegistry().shouldTrackBlock(blockTypeName)) {
+         this.plugin.getFilterRegistry().checkAndRecord(player, "CONTAINER_OPEN", blockTypeName, location);
       }
    }
 
@@ -264,7 +265,7 @@ public class UniversalListener implements Listener {
       if (!(event.getPlayer() instanceof Player player)) {
          return;
       }
-      if (this.plugin.getAntiTheftTracker() == null) {
+      if (this.plugin.getTheftMonitor() == null) {
          return;
       }
 
@@ -281,7 +282,7 @@ public class UniversalListener implements Listener {
 
       this.antiTheftLog("Closed container | " + player.getName()
             + " | " + location.getBlockX() + "," + location.getBlockY() + "," + location.getBlockZ());
-      this.plugin.getAntiTheftTracker().onContainerClose(player, location);
+      this.plugin.getTheftMonitor().onContainerClose(player, location);
    }
 
    @EventHandler
@@ -289,7 +290,7 @@ public class UniversalListener implements Listener {
       if (!(event.getWhoClicked() instanceof Player player)) {
          return;
       }
-      if (this.plugin.getAntiTheftTracker() == null || event.getClickedInventory() == null) {
+      if (this.plugin.getTheftMonitor() == null || event.getClickedInventory() == null) {
          return;
       }
 
@@ -321,7 +322,7 @@ public class UniversalListener implements Listener {
       if (location == null) {
          location = player.getLocation();
       }
-      this.plugin.getAntiTheftTracker().onStashDeposit(player, location, deposited);
+      this.plugin.getTheftMonitor().onStashDeposit(player, location, deposited);
    }
 
    private Location resolveContainerLocation(Inventory inventory) {
@@ -350,6 +351,11 @@ public class UniversalListener implements Listener {
    }
 
    @EventHandler
+   public void onPlayerQuit(PlayerQuitEvent event) {
+      this.plugin.clearPlayerRuntimeState(event.getPlayer().getUniqueId());
+   }
+
+   @EventHandler
    public void onBucketFill(PlayerBucketFillEvent event) {
       Player player = event.getPlayer();
       String bucketType = event.getItemStack().getType().name();
@@ -361,9 +367,9 @@ public class UniversalListener implements Listener {
       }
 
       String liquidType = bucketType.replace("_BUCKET", "");
-      if (this.plugin.getFilterManager().shouldTrackBlock(liquidType)) {
+      if (this.plugin.getFilterRegistry().shouldTrackBlock(liquidType)) {
          this.filterLog("BUCKET_FILL " + bucketType + " | " + player.getName());
-         this.plugin.getFilterManager().checkAndRecord(player, "BLOCK_BREAK", liquidType, location);
+         this.plugin.getFilterRegistry().checkAndRecord(player, "BLOCK_BREAK", liquidType, location);
       }
    }
 
