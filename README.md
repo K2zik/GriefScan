@@ -1,52 +1,69 @@
 # GriefScan
 
-**Anti-grief scanner for suspicious player actions — one JAR for Paper/Spigot/Folia 1.19–26.1**
+**Anti-grief scanner for suspicious player actions — one JAR for Paper, Spigot, and Folia (1.19–26.1).**
 
-Detects lava/TNT grief, arson, chest breaking, villager kills, and multi-location theft. Alerts staff via console, Discord, and optional website webhooks.
+GriefScan watches the usual grief patterns in real time: lava and TNT dumps, arson, chest breaking, villager kills, and players looting valuables from many distant containers. When something looks wrong, staff get an alert in console, admin chat, Discord, or an optional website webhook.
 
 ---
 
 ## Features
 
-- **Configurable filters** — place/break blocks, place/kill entities, with limits and time windows
-- **Anti-theft** — detects suspicious valuables taken from many distant containers
-- **Playtime exemption** — skip trusted veterans (`playtime: 30h`)
+- **Configurable filters** — place/break blocks and place/kill entities, with limits, time windows, worlds, and optional height ranges
+- **Anti-theft** — flags suspicious valuables taken from many distant containers (own shulkers are ignored)
+- **Playtime exemption** — skip trusted veterans (`playtime: 30h`, also `90m` / `2d`)
 - **Auto-ban** — optional ban after repeated violations
-- **Localization** — English and Russian (`messages.yml`, `messages_ru.yml`)
-- **Shulker ownership** — own shulkers are ignored by anti-theft
+- **Localization** — `en`, `ru`, `es`, `zh`, `hi`, `ar`, `fr`, `de`, `ja`, `pt`
+- **SQLite persistence** — violations stored in `violations.db`
+- **Alert cooldown / anti-spam** — no Discord flood
+- **Bypass** — `griefscan.bypass` plus exempt player/UUID lists
+- **Integrations** — CoreProtect and LiteBans quick commands in Discord embeds
+- **Website webhook** — POST structured JSON alerts to your panel/site
+- **Folia-safe scheduler**
+- **Clickable teleport coords** for admins (Adventure)
+- **`/griefscan inspect <player>`** — session violation summary
+
+### Built-in filters
+
+| Filter | What it watches |
+|--------|-----------------|
+| `LAVA_PLACEMENT` | Placing lava |
+| `TNT_PLACEMENT` | Placing TNT |
+| `ARSON` | Setting fire |
+| `CHEST_BREAKING` | Breaking chests / barrels |
+| `FRAME_BREAKING` | Breaking item frames |
+| `VILLAGER_KILLING` | Killing villagers |
+
+You can add your own filters in `config.yml` (armor stands, custom blocks, extra entities, etc.).
 
 ---
 
 ## Installation
 
-1. Download `GriefScan.jar`.
-2. Put it in `plugins/`.
-3. Start the server once to generate config and message files.
-4. Edit `plugins/GriefScan/config.yml` (Discord webhook, filters, etc.).
-5. Run `/griefscan reload`.
+1. Download `GriefScan.jar`
+2. Put it in `plugins/`
+3. Start the server once to generate config and message files
+4. Edit `plugins/GriefScan/config.yml` (Discord webhook, filters, worlds)
+5. Run `/griefscan reload`
 
-**Supported servers:** Paper / Folia / Spigot — Minecraft **1.19.x, 1.20.x, 1.21.x, 26.1.x**  
+**Supported servers:** Paper / Folia / Spigot  
+**Minecraft:** 1.19.x, 1.20.x, 1.21.x, 26.1.x  
 **Java:** 17+ (use the JVM required by your server)
 
-### Reliability
-- SQLite persistence for violations (`violations.db`)
-- Alert cooldown / anti-spam
-- `griefscan.bypass` + exempt player/UUID lists
-- CoreProtect / LiteBans quick commands in Discord embeds
-- Folia-safe scheduler
-- Adventure clickable teleport coords for admins
-- `/griefscan inspect <player>` session summary
+Soft-depends: [CoreProtect](https://modrinth.com/plugin/coreprotect), LiteBans
 
 ---
 
 ## Commands
 
+Aliases: `/gs`, `/grief`  
+Permission: `griefscan.admin` (default: op)
+
 | Command | Description |
 |---------|-------------|
 | `/griefscan reload` | Reload config and messages |
 | `/griefscan status` | Active filters and log stats |
-| `/griefscan toggle <filter>` | Enable/disable a filter |
-| `/griefscan logs report` | Write violations report |
+| `/griefscan toggle <filter>` | Enable or disable a filter |
+| `/griefscan logs report` | Write a violations report |
 | `/griefscan logs clear [player]` | Clear all or one player's stats |
 | `/griefscan logs stats [player]` | Overall or player violation stats |
 | `/griefscan antitheft status` | Anti-theft status |
@@ -55,25 +72,26 @@ Detects lava/TNT grief, arson, chest breaking, villager kills, and multi-locatio
 | `/griefscan language <code>` | Change language |
 | `/griefscan inspect <player>` | Session violation summary |
 
-Aliases: `/gs`, `/grief`  
-Permission: `griefscan.admin` (default: op)
+**Permissions**
+
+- `griefscan.admin` — all commands (default: op)
+- `griefscan.bypass` — skip filters and anti-theft
 
 ---
 
 ## Configuration
 
-File: `plugins/GriefScan/config.yml`
+`plugins/GriefScan/config.yml`
 
 ```yaml
-language: en   # en, ru
+language: en   # en, ru, es, zh, hi, ar, fr, de, ja, pt
 
 notify:
   console: true
   discord: true
   webhook: 'https://discord.com/api/webhooks/...'
-  website: true
-  website_url: 'https://example.com/api/griefscan'
-  messageWebsite: 'Alert: Player %player% triggered %filter% filter with %count% actions at %x% %y% %z%'
+  website: false
+  website_url: 'https://your-site.example/api/griefscan'
 
 filters:
   LAVA_PLACEMENT:
@@ -123,6 +141,7 @@ The same alert cooldown as Discord/console applies (`alerts.cooldown_seconds`).
 | URL | `notify.website_url` |
 | `Content-Type` | `application/json` |
 | `User-Agent` | `GriefScan-Plugin` |
+| Timeout | 5 seconds connect / read |
 | Success | HTTP `2xx` |
 
 Body:
@@ -153,8 +172,6 @@ Body:
 | `x` `y` `z` | number | Block coordinates |
 | `timestamp` | number | Unix time in **milliseconds** |
 
-Connect/read timeout: **5 seconds**. Non-`2xx` responses are logged as `Failed to send website notification`.
-
 ### Placeholders in `messageWebsite`
 
 | Placeholder | Value |
@@ -170,12 +187,6 @@ Connect/read timeout: **5 seconds**. Non-`2xx` responses are logged as `Failed t
 | `%litebans%` | LiteBans history command |
 | `%kick%` | Kick command |
 | `%ban%` | Ban command |
-
-Default template if `messageWebsite` is omitted:
-
-```text
-Alert: %player% triggered %filter% (%count%) at %x% %y% %z%
-```
 
 ### Example receiver (Node)
 
